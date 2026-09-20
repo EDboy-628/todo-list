@@ -3,53 +3,151 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI 生活清单 · 待办小助手</title>
+  <title>智能待办清单</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="app">
+    <!-- SECTION: header -->
     <header class="app-header">
-      <h1>AI 生活清单</h1>
-      <p class="subtitle">用一句话描述想法，AI 帮你拆成清单</p>
+      <h1>智能待办清单</h1>
+      <div class="header-actions">
+        <button class="icon-btn" id="btn-templates" title="常用模板">🗂️</button>
+        <button class="icon-btn" id="btn-stats" title="数据统计">📈</button>
+        <button class="icon-btn" id="btn-export" title="导出备份">📥</button>
+        <button class="icon-btn" id="btn-import" title="导入恢复">📤</button>
+        <button class="icon-btn" id="btn-theme" title="切换暗色模式">🌙</button>
+      </div>
     </header>
 
+    <!-- SECTION: stats -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-number" id="stat-today">0</div>
+        <div class="stat-label">今日待办</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-week">0</div>
+        <div class="stat-label">本周完成</div>
+      </div>
+      <div class="stat-card progress-ring" style="min-width:80px">
+        <svg width="56" height="56" viewBox="0 0 56 56">
+          <circle class="ring-bg" cx="28" cy="28" r="24"></circle>
+          <circle class="ring-fill" cx="28" cy="28" r="24" stroke-dasharray="150.8" stroke-dashoffset="150.8" id="ring-fill"></circle>
+        </svg>
+        <span class="ring-text" id="ring-pct">0%</span>
+      </div>
+    </div>
+
+    <!-- SECTION: smart-input -->
     <section class="smart-zone">
-      <div class="add-bar">
-        <input id="todo-input" type="text" placeholder="例如：下周去上海出差三天" autocomplete="off" />
-        <button id="add-btn">AI 拆解</button>
+      <div class="input-row">
+        <input id="todo-input" type="text" placeholder="输入一句话，AI 帮你拆解…例如：下周去北京出差三天" autocomplete="off" />
+        <button id="btn-ai" data-primary-action>✨ AI 拆解</button>
       </div>
 
-      <!-- AI 思考中骨架屏 -->
-      <div id="thinking" class="thinking hidden">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-        <span class="thinking-text">AI 正在拆解你的想法…</span>
+      <div class="thinking" id="thinking">
+        <div class="thinking-dots"><span></span><span></span><span></span></div>
+        <span class="thinking-text">AI 正在理解你的需求…</span>
       </div>
 
-      <!-- AI 解析预览卡片（确认添加前展示） -->
-      <div id="preview" class="preview hidden">
-        <div id="preview-body"></div>
+      <div class="preview" id="preview">
+        <div class="preview-header">
+          <span class="preview-meta" id="preview-meta"></span>
+          <span class="preview-group-tag" id="preview-group"></span>
+        </div>
+        <div class="preview-list" id="preview-list"></div>
         <div class="preview-actions">
-          <button id="cancel-add" class="btn-ghost">取消</button>
-          <button id="confirm-add" class="btn-primary">确认添加</button>
+          <button class="btn-ghost" id="btn-cancel">取消</button>
+          <button class="btn-primary" id="btn-confirm">确认添加</button>
         </div>
       </div>
     </section>
 
-    <section class="filters">
-      <button class="filter active" data-filter="all">全部</button>
-      <button class="filter" data-filter="active">未完成</button>
-      <button class="filter" data-filter="done">已完成</button>
-    </section>
+    <!-- SECTION: undo -->
+    <div class="undo-bar hidden" id="undo-bar">
+      <span id="undo-msg"></span>
+      <button id="btn-undo">撤销</button>
+    </div>
 
-    <section class="counts">
-      <span>已完成 <b id="done-count">0</b> / <b id="total-count">0</b></span>
-      <button id="clear-done" class="link-btn">清除已完成</button>
-    </section>
+    <!-- SECTION: filters -->
+    <div class="filter-bar">
+      <div class="filter-pills" id="filter-pills">
+        <button class="filter-pill active" data-filter="all">全部</button>
+        <button class="filter-pill" data-filter="active">未完成</button>
+        <button class="filter-pill" data-filter="done">已完成</button>
+        <button class="filter-pill" data-filter="high">高优先级</button>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="搜索任务…" autocomplete="off" />
+      </div>
+    </div>
 
-    <div id="list-wrap"></div>
+    <!-- SECTION: list -->
+    <div id="list-container"></div>
 
-    <p id="empty-hint" class="empty-hint hidden">还没有任务，输入一句话让 AI 帮你拆解吧</p>
+    <!-- SECTION: empty -->
+    <div class="empty-state hidden" id="empty-state">
+      <div class="empty-icon">📝</div>
+      <div class="empty-title">还没有任务</div>
+      <div class="empty-desc">试试输入一句话，让 AI 帮你自动拆解</div>
+      <div class="empty-tags">
+        <span class="empty-tag" data-demo="下周去上海出差三天">✈️ 出差</span>
+        <span class="empty-tag" data-demo="准备下周的期末复习">📚 学习</span>
+        <span class="empty-tag" data-demo="周末朋友来家里聚餐">🎂 聚会</span>
+        <span class="empty-tag" data-demo="搬家到新公寓">📦 搬家</span>
+      </div>
+    </div>
   </div>
+
+  <!-- SECTION: file-import -->
+  <input type="file" id="import-file" accept=".json" />
+
+  <!-- SECTION: toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- SECTION: overdue banner -->
+  <div class="overdue-banner hidden" id="overdue-banner">
+    <span class="ob-icon">⏰</span>
+    <span class="ob-text" id="overdue-text"></span>
+    <button class="ob-close" id="overdue-close">✕</button>
+  </div>
+
+  <!-- SECTION: batch bar -->
+  <div class="batch-bar hidden" id="batch-bar">
+    <span class="bb-count" id="batch-count">已选 0 项</span>
+    <div class="bb-actions">
+      <button class="bb-btn" id="batch-done">✓ 完成</button>
+      <button class="bb-btn" id="batch-priority">🔄 高优</button>
+      <button class="bb-btn danger" id="batch-delete">✕ 删除</button>
+    </div>
+  </div>
+
+  <!-- SECTION: stats modal -->
+  <div class="modal-overlay hidden" id="stats-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>数据统计</h2>
+        <button class="modal-close" id="stats-close">✕</button>
+      </div>
+      <div class="modal-body" id="stats-body"></div>
+    </div>
+  </div>
+
+  <!-- SECTION: template modal -->
+  <div class="modal-overlay hidden" id="template-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>常用模板</h2>
+        <button class="modal-close" id="template-close">✕</button>
+      </div>
+      <div class="modal-body" id="template-body"></div>
+    </div>
+  </div>
+
+  <!-- SECTION: confetti canvas -->
+  <canvas id="confetti" class="confetti"></canvas>
 
   <script src="script.js"></script>
 </body>
