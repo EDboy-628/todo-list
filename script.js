@@ -272,7 +272,12 @@ function parseInput(text) {
 function loadTodos() {
   try {
     var raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedDemo();
+    if (!raw) {
+      // 首次访问：把演示数据写入存储，保证刷新前后一致（可在页面里逐条删除）
+      var seed = seedDemo();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+      return seed;
+    }
     return JSON.parse(raw);
   } catch (e) { return seedDemo(); }
 }
@@ -347,6 +352,8 @@ var dom = {
   // 新增
   btnTemplates: $('#btn-templates'),
   btnStats: $('#btn-stats'),
+  btnBatch: $('#btn-batch'),
+  btnNotify: $('#btn-notify'),
   overdueBanner: $('#overdue-banner'),
   overdueText: $('#overdue-text'),
   overdueClose: $('#overdue-close'),
@@ -355,6 +362,7 @@ var dom = {
   batchDone: $('#batch-done'),
   batchPriority: $('#batch-priority'),
   batchDelete: $('#batch-delete'),
+  batchExit: $('#batch-exit'),
   statsModal: $('#stats-modal'),
   statsBody: $('#stats-body'),
   statsClose: $('#stats-close'),
@@ -453,7 +461,9 @@ function burstConfetti() {
 function applyTheme() {
   document.documentElement.setAttribute('data-theme', theme);
   dom.btnTheme.textContent = theme === 'dark' ? '☀️' : '🌙';
-  saveSettings({ theme: theme });
+  // 整体写回，避免覆盖 settings 中的其它字段（如通知开关）
+  settings.theme = theme;
+  saveSettings(settings);
 }
 
 /* ================================================================
@@ -492,6 +502,12 @@ function updateStats() {
 function updateOverdueBanner() {
   var now = new Date().toISOString().split('T')[0];
   var overdue = todos.filter(function (t) { return !t.done && t.deadline && t.deadline < now; });
+
+  // 系统级到期提醒：需用户手动开启，且每个自然日最多推送一次
+  if (overdue.length > 0 && isNotifyOn()) {
+    notifyOncePerDay('⏰ 有任务已逾期', '共 ' + overdue.length + ' 个任务已逾期，记得处理');
+  }
+
   if (overdue.length === 0 || dom.input.value) {
     dom.overdueBanner.classList.add('hidden');
     return;
@@ -701,16 +717,18 @@ function addSubtask(taskId, text) {
 function toggleBatchMode() {
   batchMode = !batchMode;
   batchSet = new Set();
-  if (!batchMode) dom.batchBar.classList.add('hidden');
   render();
-  if (batchMode) {
-    dom.batchBar.classList.remove('hidden');
-    showToast('批量模式已开启，点选任务');
-  }
+  updateBtnBatch();
+  showToast(batchMode ? '批量模式已开启：点选任务后批量完成 / 高优 / 删除' : '已退出批量模式');
 }
 function updateBatchUI() {
-  dom.batchCount.textContent = '已选 ' + batchSet.size + ' 项';
-  dom.batchBar.classList.toggle('hidden', batchSet.size === 0);
+  dom.batchCount.textContent = batchSet.size === 0 ? '批量模式：请点选任务' : '已选 ' + batchSet.size + ' 项';
+  dom.batchBar.classList.toggle('hidden', !batchMode);
+}
+/* 顶栏批量按钮的状态同步 */
+function updateBtnBatch() {
+  dom.btnBatch.classList.toggle('active', batchMode);
+  dom.btnBatch.title = batchMode ? '退出批量模式' : '批量操作';
 }
 function batchDoneSelected() {
   batchSet.forEach(function (id) {
@@ -913,11 +931,6 @@ function render() {
     var wrap = document.createElement('div');
     wrap.className = 'group-wrap';
 
-    // 批量模式下的"批量栏"控制
-    if (batchMode && !dom.batchBar.classList.contains('hidden') && batchSet.size === 0) {
-      dom.batchBar.classList.add('hidden');
-    }
-
     var inner = '';
     inner += '<div class="group-header">';
     inner += '<span class="group-icon">' + g.icon + '</span>';
@@ -1112,9 +1125,15 @@ function importData(file) {
       } else if (Array.isArray(data)) {
         todos = data;
       } else { throw new Error('无效格式'); }
+      // 备份中含自定义模板时一并恢复
+      var restoredTemplates = 0;
+      if (data.templates && Array.isArray(data.templates) && data.templates.length > 0) {
+        saveTemplates(data.templates);
+        restoredTemplates = data.templates.length;
+      }
       saveTodos();
       render();
-      showToast('📤 已导入 ' + todos.length + ' 条任务');
+      showToast('📤 已导入 ' + todos.length + ' 条任务' + (restoredTemplates ? ' · ' + restoredTemplates + ' 个模板' : ''));
     } catch (e) {
       showToast('❌ 文件格式无效');
     }
@@ -1149,6 +1168,8 @@ dom.btnTheme.addEventListener('click', function () {
   applyTheme();
 });
 
+dom.btnBatch.addEventListener('click', toggleBatchMode);
+dom.btnNotify.addEventListener('click', toggleNotify);
 dom.btnExport.addEventListener('click', exportData);
 dom.btnImport.addEventListener('click', function () { dom.importFile.click(); });
 dom.importFile.addEventListener('change', function (e) {
@@ -1168,7 +1189,8 @@ dom.statsClose.addEventListener('click', function () { dom.statsModal.classList.
 
 dom.overdueClose.addEventListener('click', function () { dom.overdueBanner.classList.add('hidden'); });
 
-// 批量操作按钮
+// 批量操作按钮（退出按钮与顶栏 ☑️ 均可切换批量模式）
+dom.batchExit.addEventListener('click', toggleBatchMode);
 dom.batchDone.addEventListener('click', batchDoneSelected);
 dom.batchPriority.addEventListener('click', batchPrioritySelected);
 dom.batchDelete.addEventListener('click', function () { if (confirm('确认删除所选 ' + batchSet.size + ' 项？')) batchDeleteSelected(); });
@@ -1207,7 +1229,10 @@ theme = settings.theme || 'light';
 applyTheme();
 render();
 
-/* 浏览器通知（需用户授权制，首次弹窗询问） */
+/* ================================================================
+   SECTION: Notification (浏览器到期提醒)
+   ================================================================ */
+/* 推送系统通知：仅在已授权时静默生效，未授权不打扰 */
 function notifyIfSupported(title, body) {
   try {
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -1215,4 +1240,80 @@ function notifyIfSupported(title, body) {
     }
   } catch (e) { /* no-op */ }
 }
-// 若已授权则正常，否则静默不打扰（不主动弹授权以免干扰）
+
+/* 通知开关：持久化在 smartTodo.settings 的 notify 字段 */
+function isNotifyOn() {
+  return settings.notify === true && 'Notification' in window && Notification.permission === 'granted';
+}
+
+/* 同一自然日只推送一次，避免定时刷新时重复提醒 */
+function notifyOncePerDay(title, body) {
+  var today = new Date().toISOString().split('T')[0];
+  if (settings.notifyDate === today) return;
+  notifyIfSupported(title, body);
+  settings.notifyDate = today;
+  saveSettings(settings);
+}
+
+function updateBtnNotify() {
+  var on = isNotifyOn();
+  dom.btnNotify.textContent = on ? '🔔' : '🔕';
+  dom.btnNotify.classList.toggle('active', on);
+  dom.btnNotify.title = on ? '到期通知：已开启（点击关闭）' : '到期通知：点击开启';
+}
+
+/* 顶栏 🔔：开启 / 关闭到期通知（file:// 打开时浏览器通常会拒绝授权） */
+function toggleNotify() {
+  if (!('Notification' in window)) {
+    showToast('❌ 当前浏览器不支持通知');
+    return;
+  }
+  if (isNotifyOn()) {
+    settings.notify = false;
+    saveSettings(settings);
+    updateBtnNotify();
+    showToast('🔕 已关闭到期通知');
+    return;
+  }
+
+  var asked = false;
+  var handle = function (perm) {
+    if (asked) return;
+    asked = true;
+    if (perm === 'granted') {
+      settings.notify = true;
+      saveSettings(settings);
+      showToast('🔔 到期通知已开启');
+      notifyIfSupported('智能待办清单', '到期通知已开启，任务逾期时我会提醒你');
+    } else {
+      showToast('❌ 通知权限被拒绝，可在浏览器权限设置中重新允许');
+    }
+    updateBtnNotify();
+  };
+
+  try {
+    if (Notification.permission === 'granted' || Notification.permission === 'denied') {
+      handle(Notification.permission);
+      return;
+    }
+    var p = Notification.requestPermission(handle);
+    if (p && typeof p.then === 'function') p.then(handle);
+  } catch (e) {
+    showToast('❌ 无法请求通知权限');
+  }
+}
+
+/* 定时检查：每分钟刷新统计与逾期横幅；跨天时重绘列表，保证「今天截止 / 已逾期」始终准确 */
+var lastDay = new Date().toISOString().split('T')[0];
+setInterval(function () {
+  var today = new Date().toISOString().split('T')[0];
+  if (today !== lastDay) {
+    lastDay = today;
+    render();
+  } else {
+    updateStats();
+    updateOverdueBanner();
+  }
+}, 60000);
+
+updateBtnNotify();

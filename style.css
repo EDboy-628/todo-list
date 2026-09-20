@@ -102,6 +102,7 @@ body {
   backdrop-filter: blur(8px);
 }
 .icon-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+.icon-btn.active { border-color: var(--primary); background: var(--primary); color: #fff; }
 
 /* ===== Stats Bar ===== */
 .stats-bar {
