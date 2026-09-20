@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 生活清单 · 待办小助手</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>AI 生活清单</h1>
+      <p class="subtitle">用一句话描述想法，AI 帮你拆成清单</p>
+    </header>
+
+    <section class="smart-zone">
+      <div class="add-bar">
+        <input id="todo-input" type="text" placeholder="例如：下周去上海出差三天" autocomplete="off" />
+        <button id="add-btn">AI 拆解</button>
+      </div>
+
+      <!-- AI 思考中骨架屏 -->
+      <div id="thinking" class="thinking hidden">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="thinking-text">AI 正在拆解你的想法…</span>
+      </div>
+
+      <!-- AI 解析预览卡片（确认添加前展示） -->
+      <div id="preview" class="preview hidden">
+        <div id="preview-body"></div>
+        <div class="preview-actions">
+          <button id="cancel-add" class="btn-ghost">取消</button>
+          <button id="confirm-add" class="btn-primary">确认添加</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="filters">
+      <button class="filter active" data-filter="all">全部</button>
+      <button class="filter" data-filter="active">未完成</button>
+      <button class="filter" data-filter="done">已完成</button>
+    </section>
+
+    <section class="counts">
+      <span>已完成 <b id="done-count">0</b> / <b id="total-count">0</b></span>
+      <button id="clear-done" class="link-btn">清除已完成</button>
+    </section>
+
+    <div id="list-wrap"></div>
+
+    <p id="empty-hint" class="empty-hint hidden">还没有任务，输入一句话让 AI 帮你拆解吧</p>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
